@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update sys_domain="global" table="sys_ui_action">
+    <sys_ui_action action="INSERT_OR_UPDATE">
+        <action_name/>
+        <active>true</active>
+        <client>false</client>
+        <client_script_v2><![CDATA[function onClick(g_form) {
+
+}]]></client_script_v2>
+        <comments>This will generate a CSV detailing the current Users's CRUD access to all Tables in the Instance</comments>
+        <condition/>
+        <form_action>true</form_action>
+        <form_button>false</form_button>
+        <form_button_v2>false</form_button_v2>
+        <form_context_menu>false</form_context_menu>
+        <form_link>true</form_link>
+        <form_menu_button_v2>false</form_menu_button_v2>
+        <form_style/>
+        <hint>This will generate a CSV detailing the current Users's CRUD access to all Tables in the Instance</hint>
+        <isolate_script>false</isolate_script>
+        <list_action>false</list_action>
+        <list_banner_button>false</list_banner_button>
+        <list_button>false</list_button>
+        <list_choice>false</list_choice>
+        <list_context_menu>false</list_context_menu>
+        <list_link>false</list_link>
+        <list_save_with_form_button>false</list_save_with_form_button>
+        <list_style/>
+        <messages/>
+        <name>Audit Table Access - Generate CSV</name>
+        <onclick/>
+        <order>100</order>
+        <script><![CDATA[var strCurrentUserName = gs.getUserName(); // Example: admin
+var strTargetUserName = String(current.user_name); // Example: ashley.parker
+
+// This Impersonates the Target User to perform the ACL Audit
+gs.getSession().onlineImpersonate(strTargetUserName);
+
+fnGetAuditCSV(gs.getUserID());
+
+// This returns us to the Current (i.e. Ourselves) User Record
+gs.getSession().onlineImpersonate(strCurrentUserName);
+gs.flushMessages();
+action.setRedirectURL(current);
+
+function fnGetAuditCSV(sysIdSysUser) {
+    try {
+        var csvData = fnCheckCRUDSecurity(csvData); // This will contain a string which is used to build the CSV file contents
+
+        var gdt = new GlideDateTime();
+        var strFileName = gs.getUserName() + '_' + gs.getUserDisplayName() + '_' + gdt.getDisplayValue() + '.csv';
+
+        var grSysUser = new GlideRecord(current.sys_class_name);
+        grSysUser.get(sysIdSysUser);
+
+        var gsAttachment = new GlideSysAttachment();
+        return gsAttachment.write(grSysUser, strFileName, 'application/csv', csvData);
+    } catch (error) {
+        gs.addErrorMessage('Error encountered with User ACL Audit: ' + error);
+    }
+}
+
+function fnCheckCRUDSecurity(csvData) {
+    try {
+        var arrHeaders = ['TABLE LABEL', 'TABLE NAME', 'CREATE', 'CREATE ACLs', 'READ', 'READ ACLs', 'UPDATE', 'UPDATE ACLs', 'DELETE', 'DELETE ACLs', 'ACCESS', 'ACCESS ACLs'];
+        csvData = csvData ? csvData + arrHeaders + '\r\n' : arrHeaders + '\r\n';
+        var strACLLinkBase = gs.getProperty('instance_name') + '.service-now.com/sys_security_acl_list.do?sysparm_query=sys_idIN';
+        var objCRUDaccess = {};
+        var objCRUDsysIdACLs = {};
+        var grSysDBObject = new GlideRecord('sys_db_object');
+        grSysDBObject.addNotNullQuery('name');
+        grSysDBObject.addNotNullQuery('sys_scope');
+        //grSysDBObject.addQuery('name','!=','sys_decision_input'); //This table can cause possible failures - PARENT IS NULL could be issue, unsure.
+        grSysDBObject.orderBy('name');
+        grSysDBObject.orderBy('label');
+        grSysDBObject.query();
+        while (grSysDBObject.next()) {
+            try {
+                if (grSysDBObject.isValidRecord()) {
+                    if (grSysDBObject.name) {
+                        csvData += '"' + grSysDBObject.label + '"' + ',';
+                        csvData += '"' + grSysDBObject.name + '"' + ',';
+                        objCRUDaccess = fnCheckTableAccess(grSysDBObject.name, objCRUDaccess);
+                        csvData += objCRUDaccess.blnCreate ? (true + ',') + '"' + strACLLinkBase + objCRUDaccess.objCRUDsysIdACLs.arrCreateACLs + '"' + ',' : (false + ',,');
+                        csvData += objCRUDaccess.blnRead ? (true + ',') + '"' + strACLLinkBase + objCRUDaccess.objCRUDsysIdACLs.arrReadACLs + '"' + ',' : (false + ',,');
+                        csvData += objCRUDaccess.blnUpdate ? (true + ',') + '"' + strACLLinkBase + objCRUDaccess.objCRUDsysIdACLs.arrUpdateACLs + '"' + ',' : (false + ',,');
+                        csvData += objCRUDaccess.blnDelete ? (true + ',') + '"' + strACLLinkBase + objCRUDaccess.objCRUDsysIdACLs.arrDeleteACLs + '"' + ',' : (false + ',,');
+                        csvData += objCRUDaccess.blnAccess ? (true + ',') + '"' + strACLLinkBase + objCRUDaccess.objCRUDsysIdACLs.arrAccessACLs + '"' + ',\r\n' : (false + ',\r\n');
+                    }
+                }
+            } catch (errorDBObject) {
+                gs.addErrorMessage('Error encountered with User ACL Audit, in function fnCheckCRUDSecurity: ' + errorDBObject);
+            }
+        }
+        return csvData;
+    } catch (error) {
+        gs.addErrorMessage('Error encountered with User ACL Audit: ' + error);
+    }
+}
+
+function fnCheckTableAccess(strTableName, objCRUDaccess) {
+    try {
+        var grTable = new GlideRecord(strTableName);
+        if (grTable.isValid()) {
+            objCRUDaccess.blnCreate = grTable.canCreate() ? true : false;
+            objCRUDaccess.blnRead = grTable.canRead() ? true : false;
+            objCRUDaccess.blnUpdate = grTable.canWrite() ? true : false;
+            objCRUDaccess.blnDelete = grTable.canDelete() ? true : false;
+            objCRUDaccess.blnAccess = (objCRUDaccess.blnCreate || objCRUDaccess.blnRead || objCRUDaccess.blnUpdate || objCRUDaccess.blnDelete) ? true : false;
+            // objCRUDaccess.blnAccess = false;
+            objCRUDaccess.objCRUDsysIdACLs = {};
+            objCRUDaccess.objCRUDsysIdACLs = objCRUDaccess.blnAccess ? fnCheckACLs(strTableName, objCRUDaccess.objCRUDsysIdACLs) : '';
+
+            return objCRUDaccess;
+        }
+    } catch (error) {
+        gs.addErrorMessage('Error encountered with User ACL Audit, in function fnCheckTableAccess: ' + error);
+    }
+}
+
+function fnCheckACLs(strTableName, objCRUDsysIdACLs) {
+    var arrACLs = [];
+
+    var grSysSecurityACL = new GlideRecord('sys_security_acl');
+    grSysSecurityACL.addActiveQuery();
+    grSysSecurityACL.addEncodedQuery("name=" + strTableName + "^ORnameSTARTSWITH" + strTableName + '.');
+    grSysSecurityACL.autoSysFields(false);
+    grSysSecurityACL.setWorkflow(false);
+    grSysSecurityACL.query();
+    while (grSysSecurityACL.next()) {
+        arrACLs.push(String(grSysSecurityACL.sys_id));
+    }
+
+    var gr = new GlideMultipleUpdate('sys_security_acl');
+    gr.addQuery('sys_id', 'IN', arrACLs);
+    gr.setValue('active', false);
+    gr.execute();
+
+    objCRUDsysIdACLs.arrCreateACLs = [];
+    objCRUDsysIdACLs.arrReadACLs = [];
+    objCRUDsysIdACLs.arrUpdateACLs = [];
+    objCRUDsysIdACLs.arrDeleteACLs = [];
+    objCRUDsysIdACLs.arrAccessACLs = [];
+
+    arrACLs.forEach(function(element, index, array) {
+        var gr = new GlideMultipleUpdate('sys_security_acl');
+        gr.addQuery('sys_id', '=', element);
+        gr.setValue('active', true);
+        gr.execute();
+
+        var grTable = new GlideRecord(strTableName);
+        if (grTable.isValid()) {
+            objCRUDsysIdACLs.arrCreateACLs.push(grTable.canCreate() ? element : false);
+            objCRUDsysIdACLs.arrReadACLs.push(grTable.canRead() ? element : false);
+            objCRUDsysIdACLs.arrUpdateACLs.push(grTable.canWrite() ? element : false);
+            objCRUDsysIdACLs.arrDeleteACLs.push(grTable.canDelete() ? element : false);
+            objCRUDsysIdACLs.arrAccessACLs.push((grTable.canCreate() || grTable.canRead() || grTable.canWrite() || grTable.canDelete()) ? element : false);
+        }
+
+        var gr = new GlideMultipleUpdate('sys_security_acl');
+        gr.addQuery('sys_id', '=', element);
+        gr.setValue('active', false);
+        gr.execute();
+    });
+
+    var gr = new GlideMultipleUpdate('sys_security_acl');
+    gr.addQuery('sys_id', 'IN', arrACLs);
+    gr.setValue('active', true);
+    gr.execute();
+
+    var gr = new GlideMultipleDelete('sys_security_acl_role');
+    gr.addNullQuery('sys_security_acl');
+    gr.execute();
+
+    for (property in objCRUDsysIdACLs) {
+        objCRUDsysIdACLs[property] = objCRUDsysIdACLs[property].filter(function(element) {
+            return !!element != false;
+        });
+    }
+
+    return objCRUDsysIdACLs;
+}]]></script>
+        <show_insert>false</show_insert>
+        <show_multiple_update>false</show_multiple_update>
+        <show_query>false</show_query>
+        <show_update>true</show_update>
+        <sys_class_name>sys_ui_action</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2021-01-25 04:18:38</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>5dc8fcef2f7120104d462d6df699b61b</sys_id>
+        <sys_mod_count>28</sys_mod_count>
+        <sys_name>Audit Table Access - Generate CSV</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Global" source="global">global</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Testing an App in Stage">19ac4a1187b7a4102cb77597cebb3526</sys_scope>
+        <sys_update_name>sys_ui_action_5dc8fcef2f7120104d462d6df699b61b</sys_update_name>
+        <sys_updated_by>thriveadmin-nh</sys_updated_by>
+        <sys_updated_on>2021-04-27 20:47:56</sys_updated_on>
+        <table>sys_user</table>
+        <ui11_compatible>true</ui11_compatible>
+        <ui16_compatible>false</ui16_compatible>
+    </sys_ui_action>
+    <sys_claim action="INSERT_OR_UPDATE">
+        <claim_owner_scope display_value="Testing an App in Stage">19ac4a1187b7a4102cb77597cebb3526</claim_owner_scope>
+        <claim_timestamp>1791516a6260000001</claim_timestamp>
+        <metadata_update_name>sys_ui_action_5dc8fcef2f7120104d462d6df699b61b</metadata_update_name>
+        <previous_claim_app_version>1.0.3</previous_claim_app_version>
+        <previous_claim_name>Testing an App in Stage</previous_claim_name>
+        <previous_claim_scope>19ac4a1187b7a4102cb77597cebb3526</previous_claim_scope>
+        <sys_created_by>thriveadmin-nh</sys_created_by>
+        <sys_created_on>2021-04-27 20:47:56</sys_created_on>
+        <sys_id>08cd8a1987b7a4102cb77597cebb3501</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>thriveadmin-nh</sys_updated_by>
+        <sys_updated_on>2021-04-27 20:47:56</sys_updated_on>
+    </sys_claim>
+    <sys_claim action="INSERT_OR_UPDATE">
+        <claim_owner_scope display_value="Testing an App in Stage">19ac4a1187b7a4102cb77597cebb3526</claim_owner_scope>
+        <claim_timestamp>17914e52ed10000001</claim_timestamp>
+        <metadata_update_name>sys_ui_action_5dc8fcef2f7120104d462d6df699b61b</metadata_update_name>
+        <previous_claim_app_version>1.0.3</previous_claim_app_version>
+        <previous_claim_name>Access Audit</previous_claim_name>
+        <previous_claim_scope>10ce9e7207922010aed2f7fc7c1ed036</previous_claim_scope>
+        <sys_created_by>thriveadmin-nh</sys_created_by>
+        <sys_created_on>2021-04-27 20:47:56</sys_created_on>
+        <sys_id>c8cd8a1987b7a4102cb77597cebb3501</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>thriveadmin-nh</sys_updated_by>
+        <sys_updated_on>2021-04-27 20:47:56</sys_updated_on>
+    </sys_claim>
+</record_update>
