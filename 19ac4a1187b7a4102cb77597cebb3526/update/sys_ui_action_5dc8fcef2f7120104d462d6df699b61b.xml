@@ -6,7 +6,8 @@
         <client_script_v2><![CDATA[function onClick(g_form) {
 
 }]]></client_script_v2>
-        <comments>This will generate a CSV detailing the current Users's CRUD access to all Tables in the Instance</comments>
+        <comments>This will generate a CSV detailing the current Users's CRUD access to all Tables in the Instance&#13;
+testing from 'Testing an App in Stage"</comments>
         <condition/>
         <form_action>true</form_action>
         <form_button>false</form_button>
@@ -189,7 +190,7 @@ function fnCheckACLs(strTableName, objCRUDsysIdACLs) {
         <sys_domain>global</sys_domain>
         <sys_domain_path>/</sys_domain_path>
         <sys_id>5dc8fcef2f7120104d462d6df699b61b</sys_id>
-        <sys_mod_count>28</sys_mod_count>
+        <sys_mod_count>29</sys_mod_count>
         <sys_name>Audit Table Access - Generate CSV</sys_name>
         <sys_overrides/>
         <sys_package display_value="Global" source="global">global</sys_package>
@@ -197,7 +198,7 @@ function fnCheckACLs(strTableName, objCRUDsysIdACLs) {
         <sys_scope display_value="Testing an App in Stage">19ac4a1187b7a4102cb77597cebb3526</sys_scope>
         <sys_update_name>sys_ui_action_5dc8fcef2f7120104d462d6df699b61b</sys_update_name>
         <sys_updated_by>thriveadmin-nh</sys_updated_by>
-        <sys_updated_on>2021-04-27 20:47:56</sys_updated_on>
+        <sys_updated_on>2021-04-27 20:52:27</sys_updated_on>
         <table>sys_user</table>
         <ui11_compatible>true</ui11_compatible>
         <ui16_compatible>false</ui16_compatible>
